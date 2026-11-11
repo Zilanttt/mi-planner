@@ -529,42 +529,39 @@ async function startCloud(user){
 }
 function startLocal(){hideLogin();ST.mode='local';ST.uid=null;try{localStorage.setItem('mp_mode','local')}catch(e){}readLocal();setSync('local');render()}
 function hideLogin(){const l=$('#login');if(l)l.hidden=true}
-let loginMode=(()=>{try{return localStorage.getItem('mp_hasacct')?'in':'up'}catch(e){return'up'}})();
 function showLogin(msg,keepEmail){
-  const l=$('#login');l.hidden=false;const up=loginMode==='up';
+  const l=$('#login');l.hidden=false;
   l.innerHTML=`<form class="login-box" data-form="login" novalidate>
   <div class="brand"><div class="brand-mark" aria-hidden="true"><svg width="24" height="24" viewBox="0 0 24 24"><path d="M12 2l4 6-4 14-4-14z" fill="#b48cff"/><path d="M12 2l4 6h-8z" fill="#e3d4ff"/><path d="M5 8l3 0 4 14-6-9z" fill="#7d4fe0"/><path d="M19 8h-3l-4 14 6-9z" fill="#9d6bff"/></svg></div><div><h1>Mi Planner</h1><small>Planifica · Enfócate · Avanza</small></div></div>
-  <div class="seg" role="group" aria-label="Opción" style="display:grid;grid-template-columns:1fr 1fr"><button type="button" data-act="lMode" data-v="up" aria-pressed="${up}">Crear cuenta</button><button type="button" data-act="lMode" data-v="in" aria-pressed="${!up}">Ya tengo cuenta</button></div>
-  <p>${up?'Primera vez: crea tu cuenta con cualquier correo y una contraseña nueva. Después entras con lo mismo en el compu y en el celu.':'Entra con el correo y la contraseña que usaste al crear tu cuenta.'}</p>
-  <div class="field"><label for="lEmail">Correo</label><input class="in" id="lEmail" name="email" type="email" inputmode="email" autocapitalize="off" autocorrect="off" autocomplete="email" value="${esc(keepEmail||'')}"></div>
-  <div class="field"><label for="lPass">Contraseña${up?' (mínimo 6 caracteres)':''}</label><input class="in" id="lPass" name="password" type="password" autocomplete="${up?'new-password':'current-password'}"></div>
+  <p>Escribe tu correo y una contraseña. <b>Si es tu primera vez, tu cuenta se crea sola.</b> Después entras con lo mismo en el compu y en el celu.</p>
+  <div class="field"><label for="lEmail">Correo</label><input class="in" id="lEmail" name="email" type="email" inputmode="email" autocapitalize="off" autocorrect="off" autocomplete="username" value="${esc(keepEmail||'')}"></div>
+  <div class="field"><label for="lPass">Contraseña (mínimo 6 caracteres)</label><input class="in" id="lPass" name="password" type="password" autocomplete="current-password"></div>
   ${msg?`<div class="a-hint" style="color:var(--warn)">${esc(msg)}</div>`:''}
-  <button class="btn" type="submit">${up?'Crear cuenta y entrar':'Entrar'}</button>
+  <button class="btn" type="submit">Entrar</button>
   <button class="ghost-btn" type="button" data-act="useLocal" style="justify-content:center">Usar sin cuenta (solo este dispositivo)</button></form>`;
 }
 async function doLogin(fd){
-  const mode=loginMode;
   const email=String(fd.get('email')||'').trim().toLowerCase(),password=String(fd.get('password')||'');
   if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){showLogin('Ese correo no parece válido. Revísalo.',email);return}
   if(password.length<6){showLogin('La contraseña debe tener al menos 6 caracteres.',email);return}
-  const btns=document.querySelectorAll('#login button');btns.forEach(b=>b.disabled=true);
+  document.querySelectorAll('#login button').forEach(b=>b.disabled=true);
   try{
-    if(mode==='up'){
-      const {data,error}=await sb.auth.signUp({email,password});
-      if(error)throw error;
-      try{localStorage.setItem('mp_hasacct','1')}catch(e){}
-      if(data.session)await startCloud(data.user);else{loginMode='in';showLogin('Cuenta creada. Ahora entra con tu correo y contraseña.',email)}
-    }else{
-      const {data,error}=await sb.auth.signInWithPassword({email,password});
-      if(error)throw error;
-      try{localStorage.setItem('mp_hasacct','1')}catch(e){}
-      await startCloud(data.user);
+    let {data,error}=await sb.auth.signInWithPassword({email,password});
+    if(error&&/Invalid login/i.test(error.message||'')){
+      // No existe la cuenta (o la clave está mal): intentamos crearla
+      const up=await sb.auth.signUp({email,password});
+      if(up.error){
+        if(/already registered|already been registered/i.test(up.error.message||'')){showLogin('Ese correo ya tiene cuenta y la contraseña no coincide. Revísala.',email);return}
+        throw up.error;
+      }
+      if(!up.data.session){showLogin('Cuenta creada. Toca "Entrar" otra vez.',email);return}
+      data=up.data;error=null;toast('¡Cuenta creada! Bienvenido.');
     }
+    if(error)throw error;
+    await startCloud(data.user);
   }catch(e){
     const m=String(e&&e.message||'');
-    if(/already registered|already been registered/i.test(m)){loginMode='in';showLogin('Ese correo ya tiene cuenta. Escribe tu contraseña para entrar.',email);return}
-    if(/Invalid login/i.test(m)){showLogin('Correo o contraseña incorrectos. Si es tu primera vez, toca "Crear cuenta".',email);return}
-    showLogin(!navigator.onLine?'Sin internet. Prueba de nuevo con conexión.':/rate limit/i.test(m)?'Demasiados intentos seguidos. Espera un minuto.':'No se pudo: '+m,email);
+    showLogin(!navigator.onLine?'Sin internet. Prueba de nuevo con conexión.':/rate limit/i.test(m)?'Demasiados intentos seguidos. Espera un minuto.':'No se pudo entrar: '+m,email);
   }
 }
 
@@ -1273,7 +1270,6 @@ document.addEventListener('click',e=>{
   else if(a==='fReset'){F.running=false;F.mode='focus';F.left=F.preset[0]*60;fUI()}
   else if(a==='fPreset'){F.preset=v.split('-').map(Number);F.running=false;F.mode='focus';F.left=F.preset[0]*60;fUI()}
   else if(a==='useLocal')startLocal();
-  else if(a==='lMode'){const em=($('#lEmail')||{}).value||'';loginMode=v;showLogin('',em)}
   else if(a==='signOut'){(async()=>{try{await sb.auth.signOut()}catch(e){}try{localStorage.removeItem('mp_mode')}catch(e){}location.reload()})()}
   else if(a==='goLogin'){try{localStorage.removeItem('mp_mode')}catch(e){}closeModal();showLogin()}
   else if(a==='qNext'){const L=allQuotes();let n;do{n=Math.floor(Math.random()*L.length)}while(L.length>1&&n===qIdx%L.length);qIdx=n;render()}
