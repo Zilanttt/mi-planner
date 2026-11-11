@@ -236,8 +236,8 @@ textarea.in{resize:vertical;min-height:84px}
 .tl-item.opt .tl-bar{background-image:repeating-linear-gradient(180deg,rgba(12,9,22,.6) 0 4px,transparent 4px 8px)}
 .chip.opt{background:transparent;border:1px dashed var(--muted)}
 .mday{display:none}
-.daytabs{display:flex;gap:6px;overflow-x:auto;padding-bottom:4px}
-.daytabs button{flex:none;background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:7px 12px;font-weight:700;font-size:13px;color:var(--muted)}
+.daytabs{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px}
+.daytabs button{min-width:0;background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:8px 0;font-weight:700;font-size:13px;color:var(--muted)}
 .daytabs button[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:#fff}
 .cal{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px}
 .cal-h{text-align:center;font-size:12px;font-weight:800;color:var(--muted)}
@@ -297,10 +297,21 @@ textarea.in{resize:vertical;min-height:84px}
   .flip-day{font-size:16px}
   .week-scroll{display:none}
   .mday{display:block}
-  .cal-d{min-height:56px;padding:4px}
-  .cal-ev{font-size:0;height:5px;padding:0}
-  .cal-more{font-size:10px}
+  .cal{gap:3px}
+  .cal-d{min-height:50px;padding:4px 2px;flex-direction:row;flex-wrap:wrap;align-content:flex-start;justify-content:center;gap:3px;border-radius:8px}
+  .cal-d .n{width:24px;margin:0 calc((100% - 24px) / 2);font-size:12px}
+  .add-card summary .sub{display:none}
+  .cal-ev{font-size:0;width:6px;height:6px;padding:0;border-radius:50%;flex:none}
+  .cal-more{display:none}
+  .cal-h{font-size:11px}
+  .legend{gap:8px}
   .page-h h1{font-size:38px}
+}
+@media (max-width:860px) and (display-mode:browser){
+  .tabbar{top:0;bottom:auto;border-top:0;border-bottom:1px solid var(--line);padding:calc(6px + env(safe-area-inset-top)) 4px 6px}
+  body .main{padding-top:calc(84px + env(safe-area-inset-top));padding-bottom:40px}
+  .fab{bottom:calc(32px + env(safe-area-inset-bottom))}
+  .toast{bottom:calc(100px + env(safe-area-inset-bottom))}
 }
 @media (max-width:420px){ .stats{gap:10px} .stat .big{font-size:34px} }
 .mobile-top{display:none;justify-content:space-between;align-items:center}
@@ -354,6 +365,12 @@ textarea.in{resize:vertical;min-height:84px}
 .m-fb.no>b:first-child{color:var(--bad)}
 .m-steps{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:9px;font-size:14.5px;line-height:1.5}
 .m-steps li::marker{color:var(--accent);font-weight:800}
+.add-card summary{cursor:pointer;list-style:none;display:flex;align-items:center;gap:10px;font-weight:700;font-size:16px}
+.add-card summary::-webkit-details-marker{display:none}
+.add-card summary .ic{width:30px;height:30px;border-radius:9px;display:grid;place-items:center;background:var(--accent-soft);color:var(--accent)}
+.add-card summary .ic svg{width:17px;height:17px}
+.add-card summary .sub{color:var(--muted);font-size:12.5px;font-weight:600}
+@media(max-width:860px){#calGrid,#jGrid,#mGrid{grid-template-columns:1fr !important}}
 @media (prefers-reduced-motion:reduce){*{transition:none !important;animation:none !important}}
 </style>
 </head>
@@ -430,7 +447,7 @@ const ICONS={
   left:'<path d="M15 6l-6 6 6 6"/>', right:'<path d="M9 6l6 6-6 6"/>', plus:'<path d="M12 5v14M5 12h14"/>'
 };
 const ic=(k,sw=2)=>`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="${sw}" stroke-linecap="round" stroke-linejoin="round">${ICONS[k]}</svg>`;
-const NAV=[['inicio','Inicio'],['tareas','Tareas'],['horario','Horario'],['habitos','Hábitos'],['metas','Metas'],['diario','Diario'],['mente','Mente']];
+const NAV=[['inicio','Inicio'],['tareas','Tareas'],['horario','Horario'],['habitos','Hábitos'],['diario','Diario'],['mente','Mente']];
 
 /* ================= state & storage (Supabase + caché local) ================= */
 const DEFAULTS={
@@ -512,37 +529,45 @@ async function startCloud(user){
 }
 function startLocal(){hideLogin();ST.mode='local';ST.uid=null;try{localStorage.setItem('mp_mode','local')}catch(e){}readLocal();setSync('local');render()}
 function hideLogin(){const l=$('#login');if(l)l.hidden=true}
-function showLogin(msg){
-  const l=$('#login');l.hidden=false;
-  l.innerHTML=`<form class="login-box" data-form="login">
+let loginMode=(()=>{try{return localStorage.getItem('mp_hasacct')?'in':'up'}catch(e){return'up'}})();
+function showLogin(msg,keepEmail){
+  const l=$('#login');l.hidden=false;const up=loginMode==='up';
+  l.innerHTML=`<form class="login-box" data-form="login" novalidate>
   <div class="brand"><div class="brand-mark" aria-hidden="true"><svg width="24" height="24" viewBox="0 0 24 24"><path d="M12 2l4 6-4 14-4-14z" fill="#b48cff"/><path d="M12 2l4 6h-8z" fill="#e3d4ff"/><path d="M5 8l3 0 4 14-6-9z" fill="#7d4fe0"/><path d="M19 8h-3l-4 14 6-9z" fill="#9d6bff"/></svg></div><div><h1>Mi Planner</h1><small>Planifica · Enfócate · Avanza</small></div></div>
-  <p>Entra con tu cuenta para tener lo mismo en el compu y en el celu.</p>
-  <div class="field"><label for="lEmail">Correo</label><input class="in" id="lEmail" name="email" type="email" autocomplete="email" required></div>
-  <div class="field"><label for="lPass">Contraseña (mínimo 6 caracteres)</label><input class="in" id="lPass" name="password" type="password" autocomplete="current-password" minlength="6" required></div>
+  <div class="seg" role="group" aria-label="Opción" style="display:grid;grid-template-columns:1fr 1fr"><button type="button" data-act="lMode" data-v="up" aria-pressed="${up}">Crear cuenta</button><button type="button" data-act="lMode" data-v="in" aria-pressed="${!up}">Ya tengo cuenta</button></div>
+  <p>${up?'Primera vez: crea tu cuenta con cualquier correo y una contraseña nueva. Después entras con lo mismo en el compu y en el celu.':'Entra con el correo y la contraseña que usaste al crear tu cuenta.'}</p>
+  <div class="field"><label for="lEmail">Correo</label><input class="in" id="lEmail" name="email" type="email" inputmode="email" autocapitalize="off" autocorrect="off" autocomplete="email" value="${esc(keepEmail||'')}"></div>
+  <div class="field"><label for="lPass">Contraseña${up?' (mínimo 6 caracteres)':''}</label><input class="in" id="lPass" name="password" type="password" autocomplete="${up?'new-password':'current-password'}"></div>
   ${msg?`<div class="a-hint" style="color:var(--warn)">${esc(msg)}</div>`:''}
-  <button class="btn" type="submit" name="mode" value="in">Entrar</button>
-  <button class="btn sec" type="submit" name="mode" value="up">Crear cuenta</button>
+  <button class="btn" type="submit">${up?'Crear cuenta y entrar':'Entrar'}</button>
   <button class="ghost-btn" type="button" data-act="useLocal" style="justify-content:center">Usar sin cuenta (solo este dispositivo)</button></form>`;
 }
-async function doLogin(fd,mode){
-  const email=String(fd.get('email')||'').trim(),password=String(fd.get('password')||'');
-  if(!email||password.length<6){showLogin('Escribe tu correo y una contraseña de al menos 6 caracteres.');return}
+async function doLogin(fd){
+  const mode=loginMode;
+  const email=String(fd.get('email')||'').trim().toLowerCase(),password=String(fd.get('password')||'');
+  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){showLogin('Ese correo no parece válido. Revísalo.',email);return}
+  if(password.length<6){showLogin('La contraseña debe tener al menos 6 caracteres.',email);return}
   const btns=document.querySelectorAll('#login button');btns.forEach(b=>b.disabled=true);
   try{
     if(mode==='up'){
       const {data,error}=await sb.auth.signUp({email,password});
       if(error)throw error;
-      if(data.session)await startCloud(data.user);else showLogin('Te mandamos un correo para confirmar la cuenta. Confírmala y vuelve a entrar.');
+      try{localStorage.setItem('mp_hasacct','1')}catch(e){}
+      if(data.session)await startCloud(data.user);else{loginMode='in';showLogin('Cuenta creada. Ahora entra con tu correo y contraseña.',email)}
     }else{
       const {data,error}=await sb.auth.signInWithPassword({email,password});
       if(error)throw error;
+      try{localStorage.setItem('mp_hasacct','1')}catch(e){}
       await startCloud(data.user);
     }
   }catch(e){
     const m=String(e&&e.message||'');
-    showLogin(/Invalid login/i.test(m)?'Correo o contraseña incorrectos.':/already registered/i.test(m)?'Ese correo ya tiene cuenta. Usa "Entrar".':/Email not confirmed/i.test(m)?'Falta confirmar tu correo (revisa tu bandeja).':!navigator.onLine?'Sin internet. Prueba de nuevo con conexión.':'No se pudo entrar: '+m);
+    if(/already registered|already been registered/i.test(m)){loginMode='in';showLogin('Ese correo ya tiene cuenta. Escribe tu contraseña para entrar.',email);return}
+    if(/Invalid login/i.test(m)){showLogin('Correo o contraseña incorrectos. Si es tu primera vez, toca "Crear cuenta".',email);return}
+    showLogin(!navigator.onLine?'Sin internet. Prueba de nuevo con conexión.':/rate limit/i.test(m)?'Demasiados intentos seguidos. Espera un minuto.':'No se pudo: '+m,email);
   }
 }
+
 async function boot(){
   if(!sb){startLocal();return}
   let session=null;try{({data:{session}}=await sb.auth.getSession())}catch(e){}
@@ -658,8 +683,9 @@ function vHome(){
   <section class="grid g3">
     <div class="card"><div class="card-h"><h2><span class="ic">${ic('habitos')}</span>Hábitos de hoy</h2><a class="sub" href="#habitos" style="text-decoration:none">Tracker →</a></div>
       <div class="hab-list">${habs.map(h=>`<div class="hab"><span class="hab-ic" style="background:${h.color||'#9d6bff'}">${esc((h.name||'?').trim()[0]||'?').toUpperCase()}</span><span class="hab-name">${esc(h.name)}<small>${weekDays.filter(d=>(h.log||{})[dkey(d)]).length}/7 esta semana · <span class="streak">Racha ${streak(h)} d</span></small></span><button type="button" class="hcheck${(h.log||{})[tk]?' on':''}" data-act="toggleHabit" data-id="${h.id}" data-d="${tk}" aria-label="Marcar ${esc(h.name)} hoy"></button></div>`).join('')||`<div class="empty">Sin hábitos todavía. <a href="#habitos">Crea el primero</a>.</div>`}</div></div>
-    <div class="card"><div class="card-h"><h2><span class="ic">${ic('metas')}</span>Metas</h2><a class="sub" href="#metas" style="text-decoration:none">Ver todas →</a></div>
-      <div style="display:flex;flex-direction:column;gap:14px">${goals.slice(0,4).map(g=>`<div class="mini-goal"><div class="row"><span>${esc(g.title)}</span><span class="num">${+g.progress||0}%</span></div><div class="bar"><i style="width:${+g.progress||0}%;background:${cat(g.cat).c}"></i></div></div>`).join('')||`<div class="empty">Define una meta grande. <a href="#metas">Agregar meta</a>.</div>`}</div></div>
+    <div class="card"><div class="card-h"><h2><span class="ic">${ic('metas')}</span>Metas rápidas</h2><a class="sub" href="#metas" style="text-decoration:none">Detalle →</a></div>
+      <div style="display:flex;flex-direction:column;gap:14px">${goals.map(g=>`<div class="mini-goal"><div class="row"><span>${esc(g.title)}</span><span class="num">${+g.progress||0}%</span></div><div style="display:flex;align-items:center;gap:6px"><div class="bar" style="flex:1"><i style="width:${+g.progress||0}%;background:${cat(g.cat).c}"></i></div><button class="icon-btn" type="button" data-act="goalStep" data-id="${g.id}" data-v="-10" aria-label="Restar 10% a ${esc(g.title)}">−</button><button class="icon-btn" type="button" data-act="goalStep" data-id="${g.id}" data-v="10" aria-label="Sumar 10% a ${esc(g.title)}">+</button></div></div>`).join('')||`<div class="empty">Escribe una meta abajo para empezar.</div>`}</div>
+      <form class="quick" data-form="quickGoal"><input class="in" name="title" placeholder="Nueva meta…" autocomplete="off" aria-label="Nueva meta"><button class="btn" type="submit" aria-label="Agregar meta">${ic('plus')}</button></form></div>
     <div class="card"><div class="card-h"><h2><span class="ic">${ic('notas')}</span>Notas rápidas</h2><span class="sub">Se guardan solas</span></div>
       <textarea class="notes" id="notes" data-notes placeholder="Ideas, recordatorios, cosas que no quieres olvidar…" aria-label="Notas rápidas">${esc(S.meta.notes)}</textarea></div>
   </section>`;
@@ -703,19 +729,19 @@ function vRoutine(){
     return`<div class="wk-col${i===td?' today':''}" style="height:${H}px;--hour:${hour}px">${bl}</div>`;
   }).join('');
   const dayList=R.filter(b=>(b.days||[]).includes(mobileDay)).sort((a,b)=>mins(a.start)-mins(b.start));
-  return`<form class="card" data-form="addBlock"><div class="card-h"><h2><span class="ic">${ic('plus')}</span>Agregar a la rutina</h2><span class="sub">Clases, trabajo, gym, lo que se repite</span></div>
+  return`<div class="card"><div class="card-h"><h2><span class="ic">${ic('horario')}</span>Semana tipo</h2><div class="legend">${Object.values(CATS).map(c=>`<span><i style="background:${c.c}"></i>${c.n}</span>`).join('')}<span><i style="background:repeating-linear-gradient(135deg,#9d6bff 0 3px,#3a2e5c 3px 6px)"></i>Opcional</span></div></div>
+  ${R.length?'':'<div class="empty" style="margin-bottom:12px">Tu semana está vacía. Agrega tus ramos y actividades arriba, o pídele a Claude que la cargue por ti.</div>'}
+  <div class="week-scroll"><div class="week"><div></div>${DS.map((d,i)=>`<div class="wk-h${i===td?' today':''}">${d}</div>`).join('')}<div class="wk-axis" style="height:${H}px">${axis.join('')}</div>${cols}</div></div>
+  <div class="mday"><div class="daytabs" role="group" aria-label="Día">${DS.map((d,i)=>`<button type="button" data-act="mDay" data-v="${i}" aria-pressed="${i===mobileDay}">${d}</button>`).join('')}</div>
+  <div class="tl" style="margin-top:12px">${dayList.map(b=>`<div class="tl-item${b.opt?' opt':''}"><div class="tl-time num">${b.start}</div><div class="tl-bar" style="background:${cat(b.cat).c}"></div><div class="tl-body"><div><b>${esc(b.title)}</b><small>${b.start}–${b.end}${b.opt?' · Opcional':''}${b.place?' · '+esc(b.place):''}</small></div><button type="button" class="icon-btn" data-act="del" data-doc="agenda" data-list="routine" data-id="${b.id}" aria-label="Eliminar bloque">${ic('x')}</button></div></div>`).join('')||'<div class="empty">Nada este día.</div>'}</div></div></div>
+  <details class="card add-card"${R.length?'':' open'}><summary><span class="ic">${ic('plus')}</span>Agregar a la rutina <span class="sub">clases, trabajo, gym…</span></summary><form data-form="addBlock" style="margin-top:14px">
   <div class="form-row"><div class="field wide"><label for="bTitle">Actividad</label><input class="in" id="bTitle" name="title" required placeholder="Ej: Investigación de Operaciones" autocomplete="off"></div>
   <div class="field"><label for="bStart">Inicio</label><input class="in" type="time" id="bStart" name="start" required value="08:30"></div>
   <div class="field"><label for="bEnd">Término</label><input class="in" type="time" id="bEnd" name="end" required value="10:00"></div>
   <div class="field"><label for="bCat">Categoría</label><select class="in" id="bCat" name="cat">${catOptions('uni')}</select></div>
   <div class="field"><label for="bOpt">Asistencia</label><select class="in" id="bOpt" name="opt"><option value="">Obligatoria</option><option value="1">Opcional</option></select></div>
   <div class="field"><label for="bPlace">Lugar (opcional)</label><input class="in" id="bPlace" name="place" placeholder="Sala, campus…" autocomplete="off"></div></div>
-  <div class="form-row" style="margin-top:12px;justify-content:space-between"><div class="field" style="flex:none"><span class="lbl">Días</span><div class="pickers">${DS.map((d,i)=>`<label><input type="checkbox" name="day" value="${i}"${i===td?' checked':''}><span>${d}</span></label>`).join('')}</div></div><button class="btn" type="submit">${ic('plus')}Agregar bloque</button></div></form>
-  <div class="card"><div class="card-h"><h2><span class="ic">${ic('horario')}</span>Semana tipo</h2><div class="legend">${Object.values(CATS).map(c=>`<span><i style="background:${c.c}"></i>${c.n}</span>`).join('')}<span><i style="background:repeating-linear-gradient(135deg,#9d6bff 0 3px,#3a2e5c 3px 6px)"></i>Opcional</span></div></div>
-  ${R.length?'':'<div class="empty" style="margin-bottom:12px">Tu semana está vacía. Agrega tus ramos y actividades arriba, o pídele a Claude que la cargue por ti.</div>'}
-  <div class="week-scroll"><div class="week"><div></div>${DS.map((d,i)=>`<div class="wk-h${i===td?' today':''}">${d}</div>`).join('')}<div class="wk-axis" style="height:${H}px">${axis.join('')}</div>${cols}</div></div>
-  <div class="mday"><div class="daytabs" role="group" aria-label="Día">${DS.map((d,i)=>`<button type="button" data-act="mDay" data-v="${i}" aria-pressed="${i===mobileDay}">${d}</button>`).join('')}</div>
-  <div class="tl" style="margin-top:12px">${dayList.map(b=>`<div class="tl-item${b.opt?' opt':''}"><div class="tl-time num">${b.start}</div><div class="tl-bar" style="background:${cat(b.cat).c}"></div><div class="tl-body"><div><b>${esc(b.title)}</b><small>${b.start}–${b.end}${b.opt?' · Opcional':''}${b.place?' · '+esc(b.place):''}</small></div><button type="button" class="icon-btn" data-act="del" data-doc="agenda" data-list="routine" data-id="${b.id}" aria-label="Eliminar bloque">${ic('x')}</button></div></div>`).join('')||'<div class="empty">Nada este día.</div>'}</div></div></div>`;
+  <div class="form-row" style="margin-top:12px;justify-content:space-between"><div class="field" style="flex:1 1 100%"><span class="lbl">Días</span><div class="pickers">${DS.map((d,i)=>`<label><input type="checkbox" name="day" value="${i}"${i===td?' checked':''}><span>${d}</span></label>`).join('')}</div></div><button class="btn" type="submit">${ic('plus')}Agregar bloque</button></div></form></details>`;
 }
 function vCalendar(){
   const y=calMonth.getFullYear(),m=calMonth.getMonth();
@@ -769,7 +795,7 @@ function vHabits(){
 
 function vGoals(){
   const goals=S.goals.items||[];
-  return`<div class="page-h"><div><h1>Metas</h1><p>Lo grande que quieres lograr. Actualiza el avance cuando des un paso.</p></div></div>
+  return`<div class="page-h"><div><h1>Metas</h1><p><a href="#inicio" style="color:var(--accent);text-decoration:none;font-weight:700">← Inicio</a> · Lo grande que quieres lograr. Actualiza el avance cuando des un paso.</p></div></div>
   <div class="grid g2">${goals.map(g=>{const p=+g.progress||0;const left=g.deadline?diffDays(g.deadline):null;return`<div class="card goal"><div class="goal-top"><span class="hab-ic" style="background:${cat(g.cat).c}">${ic('metas')}</span><div style="flex:1;min-width:0"><h3>${esc(g.title)}</h3>${g.desc?`<p>${esc(g.desc)}</p>`:''}</div><span class="goal-pct num">${p}%</span><button type="button" class="icon-btn" data-act="del" data-doc="goals" data-list="items" data-id="${g.id}" aria-label="Eliminar meta">${ic('x')}</button></div>
   <div class="bar" style="height:9px"><i style="width:${p}%;background:linear-gradient(90deg,${cat(g.cat).c},#ff8a5c)"></i></div>
   <div class="goal-meta"><span>${catChip(g.cat)}</span><span>${left==null?'Sin fecha límite':left<0?`<span style="color:var(--bad)">Venció hace ${-left} d</span>`:left===0?'Vence hoy':`Quedan ${left} días`}</span></div>
@@ -1247,6 +1273,7 @@ document.addEventListener('click',e=>{
   else if(a==='fReset'){F.running=false;F.mode='focus';F.left=F.preset[0]*60;fUI()}
   else if(a==='fPreset'){F.preset=v.split('-').map(Number);F.running=false;F.mode='focus';F.left=F.preset[0]*60;fUI()}
   else if(a==='useLocal')startLocal();
+  else if(a==='lMode'){const em=($('#lEmail')||{}).value||'';loginMode=v;showLogin('',em)}
   else if(a==='signOut'){(async()=>{try{await sb.auth.signOut()}catch(e){}try{localStorage.removeItem('mp_mode')}catch(e){}location.reload()})()}
   else if(a==='goLogin'){try{localStorage.removeItem('mp_mode')}catch(e){}closeModal();showLogin()}
   else if(a==='qNext'){const L=allQuotes();let n;do{n=Math.floor(Math.random()*L.length)}while(L.length>1&&n===qIdx%L.length);qIdx=n;render()}
@@ -1277,8 +1304,9 @@ document.addEventListener('change',e=>{const f=e.target.closest('[data-m-filter]
 document.addEventListener('submit',e=>{
   const f=e.target.closest('[data-form]');if(!f)return;e.preventDefault();
   const fd=new FormData(f),g=k=>(fd.get(k)||'').toString().trim(),kind=f.dataset.form;
-  if(kind==='login'){const m=(e.submitter&&e.submitter.value)||'in';doLogin(fd,m);return}
+  if(kind==='login'){doLogin(fd);return}
   if(kind==='mAnswer'){const raw=g('ans');if(!raw||MS.done)return;mRecord(checkAnswer(MS.p,raw),raw);return}
+  if(kind==='quickGoal'){const t=g('title');if(!t)return;list('goals','items').push({id:newId(),title:t,desc:'',cat:'personal',deadline:null,progress:0});save('goals');render();return}
   if(kind==='quickTask'){const t=g('title');if(!t)return;list('tasks','items').push({id:newId(),title:t,bucket:'now',prio:'media',cat:'personal',due:null,done:false,created:today()});save('tasks');render();const q=$('#quickTitle');if(q)q.focus()}
   else if(kind==='addTask'){list('tasks','items').push({id:newId(),title:g('title'),bucket:g('bucket')||'now',prio:g('prio')||'media',cat:g('cat'),due:g('due')||null,done:false,created:today()});save('tasks');render();toast('Tarea agregada');$('#tTitle')&&$('#tTitle').focus()}
   else if(kind==='addBlock'){const days=fd.getAll('day').map(Number);if(!days.length){toast('Elige al menos un día');return}if(mins(g('end'))<=mins(g('start'))){toast('La hora de término debe ser después del inicio');return}list('agenda','routine').push({id:newId(),title:g('title'),days,start:g('start'),end:g('end'),cat:g('cat'),place:g('place'),opt:g('opt')==='1'});save('agenda');render();toast('Bloque agregado a tu semana')}
